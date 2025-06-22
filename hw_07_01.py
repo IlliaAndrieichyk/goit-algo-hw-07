@@ -1,6 +1,19 @@
 from collections import UserDict
 from datetime import datetime, timedelta
 import re
+from typing import Callable
+
+def input_error(func):
+    def inner(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except KeyError:
+            return "No such contact found."
+        except ValueError as e:
+            return str(e)
+        except IndexError:
+            return "Enter the argument for the command."
+    return inner
 
 class Field:
     def __init__(self, value):
@@ -42,12 +55,11 @@ class Record:
             raise ValueError("Phone number not found.")
 
     def edit_phone(self, old_phone_number, new_phone_number):
-        phone_to_edit = self.find_phone(old_phone_number)
-        if phone_to_edit:
-            self.remove_phone(old_phone_number)
-            self.add_phone(new_phone_number)
-        else:
-            raise ValueError("Phone number not found.")
+        for idx, phone in enumerate(self.phones):
+            if phone.value == old_phone_number:
+                self.phones[idx] = Phone(new_phone_number)
+                return
+        raise ValueError("Phone number not found.")
 
     def find_phone(self, phone_number):
         for phone in self.phones:
@@ -82,7 +94,9 @@ class AddressBook(UserDict):
         for record in self.data.values():
             if record.birthday:
                 birthday_this_year = record.birthday.value.replace(year=today.year)
-                days_until_birthday = (birthday_this_year - today).days
+                if birthday_this_year.date() < today.date():
+                    birthday_this_year = birthday_this_year.replace(year=today.year + 1)
+                days_until_birthday = (birthday_this_year.date() - today.date()).days
                 if 0 <= days_until_birthday <= 7:
                     if birthday_this_year.weekday() >= 5:
                         birthday_this_year += timedelta(days=(7 - birthday_this_year.weekday()))
@@ -92,39 +106,12 @@ class AddressBook(UserDict):
     def __str__(self):
         return "\n".join(str(record) for record in self.data.values())
 
-def input_error(func):
-    def inner(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except KeyError:
-            return "No such contact found."
-        except ValueError as e:
-            return str(e)
-        except IndexError:
-            return "Enter the argument for the command."
-    return inner
-
-
 def parse_input(user_input):
     parts = user_input.strip().split()
     cmd = parts[0].lower()
     args = parts[1:]
     return cmd, args
 
-
-
-@input_error
-def add_birthday(args, book: AddressBook):
-    if len(args) != 2:
-        raise ValueError("Give me name and birthday please.")
-    name, birthday = args
-    record = book.find(name)
-    if record:
-        record.add_birthday(birthday)
-        return "Birthday added."
-    return "Contact not found."
-
-# Інші функції-обробники
 @input_error
 def add_contact(args, book: AddressBook):
     name, phone, *_ = args
@@ -160,6 +147,15 @@ def show_all(args, book: AddressBook):
     return str(book)
 
 @input_error
+def add_birthday(args, book: AddressBook):
+    name, birthday = args
+    record = book.find(name)
+    if record:
+        record.add_birthday(birthday)
+        return "Birthday added."
+    return "Contact not found."
+
+@input_error
 def show_birthday(args, book: AddressBook):
     name = args[0]
     record = book.find(name)
@@ -174,14 +170,12 @@ def birthdays(args, book: AddressBook):
         return "\n".join(f"{entry['name']}: {entry['birthday']}" for entry in upcoming_birthdays)
     return "No upcoming birthdays."
 
-
 def main():
     book = AddressBook()
     print("Welcome to the assistant bot!")
     while True:
         user_input = input("Enter a command: ")
         command, args = parse_input(user_input)
-
 
         if command in ["close", "exit"]:
             print("Good bye!")
@@ -204,7 +198,6 @@ def main():
             print(birthdays(args, book))
         else:
             print("Invalid command.")
-            
+
 if __name__ == "__main__":
     main()
-
